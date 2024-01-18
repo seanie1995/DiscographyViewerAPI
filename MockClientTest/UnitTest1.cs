@@ -13,6 +13,8 @@ using DiscographyViewerAPI.Models.Dto;
 using System.Text.Json.Serialization;
 using System.Text.Json;
 using System.Runtime.CompilerServices;
+using FluentAssertions;
+using DiscographyViewerAPI.Models.ViewModels;
 
 namespace MockClientTest
 {
@@ -21,10 +23,7 @@ namespace MockClientTest
     {
         [TestMethod]
         public async Task GetCorrectDiscography_GetExpectedResults()
-        {
-
-            string jsonString = "{\"album\":[{\"strAlbum\":\"The Fear of Fear\",\"intYearReleased\":\"2023\"},{\"strAlbum\":\"Rotoscope\",\"intYearReleased\":\"2022\"},{\"strAlbum\":\"Eternal Blue\",\"intYearReleased\":\"2021\"}]}";
-
+        {       
             // Arrange
             var mockHandler = new Mock<HttpClientHandler>();
             mockHandler
@@ -37,28 +36,59 @@ namespace MockClientTest
                 .ReturnsAsync(new HttpResponseMessage()
                 {
                     StatusCode = HttpStatusCode.OK,
-                    Content = new StringContent(jsonString)
+                    Content = new StringContent("{\"album\":[{\"strAlbum\":\"The Fear of Fear\",\"intYearReleased\":\"2023\"},{\"strAlbum\":\"Rotoscope\",\"intYearReleased\":\"2022\"},{\"strAlbum\":\"Eternal Blue\",\"intYearReleased\":\"2021\"}]}")
                 });
             HttpClient mockClient = new HttpClient(mockHandler.Object);
             DiscographyService service = new DiscographyService(mockClient);
 
-            // Act
+            // Act           
 
-            var expectedResult = JsonSerializer.Deserialize<DiscographyDto>(jsonString);
+            var result = await service.GetDiscographyAsync("");
 
-            var result = await service.GetDiscographyAsync("shadows+fall");
-            
-            string strResult = result.ToString();
-
-            string strExpResult = expectedResult.ToString();
-
-
+            DiscographyViewModel newResult = new DiscographyViewModel()
+            {
+                Album = result.Album.Select(a => new AlbumViewModel()
+                {
+                    Name = a.StrAlbum,
+                    YearReleased = a.IntYearReleased,
+                }).ToList(),
+            };
 
             // Assert
 
-            Assert.AreEqual(strResult, strExpResult);
-
+            Assert.AreEqual(newResult.Album[0].Name, "The Fear of Fear");
+            //Assert.AreEqual(3, result.Album.Count);
 
         }
+
+
+        [TestMethod]
+        [ExpectedException(typeof(HttpRequestException))]
+        public async Task GetCorrectDiscography_GetException()
+        {
+            // Arrange
+            var mockHandler = new Mock<HttpClientHandler>();
+            mockHandler
+                .Protected()
+                .Setup<Task<HttpResponseMessage>>(
+                    "SendAsync",
+                    ItExpr.IsAny<HttpRequestMessage>(),
+                    ItExpr.IsAny<CancellationToken>()
+                )
+                .ReturnsAsync(new HttpResponseMessage()
+                {
+                    StatusCode = HttpStatusCode.InternalServerError                
+                });
+            HttpClient mockClient = new HttpClient(mockHandler.Object);
+            DiscographyService service = new DiscographyService(mockClient);
+
+            // Act           
+
+            await service.GetDiscographyAsync("");
+
+           
+
+        }
+
     }
 }
